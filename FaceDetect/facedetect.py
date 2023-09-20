@@ -106,8 +106,8 @@ class FaceDetect:
             raise Exception(error)
 
         # Raise exceptions caused by canvas (cv2) and raise as FaceDetect Exception
-        #except self.canvas.error:
-            #raise Exception("There was a problem starting the FaceDetect canvas")
+        except self.canvas.error:
+            raise Exception("There was a problem starting the FaceDetect canvas")
 
         # Any other exception classify as data runtime issue and raise as FaceDetect Exception
         except Exception as error:

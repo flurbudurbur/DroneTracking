@@ -2,9 +2,8 @@
   "ExpandedNodes": [
     "",
     "\\FaceDetect",
-    "\\outputs",
     "\\resources"
   ],
-  "SelectedNode": "\\main_recognize_image.py",
+  "SelectedNode": "\\drone_target.py",
   "PreviewInSolutionExplorer": false
 }
