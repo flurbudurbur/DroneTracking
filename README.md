@@ -112,15 +112,15 @@ There are several libraries and packages needed to run this program successfully
 
 In order to successfully install and build all the dependencies locally, CMake needs to be installed for python
 ```bash
-    // Use Homebrew to install Cmake
-    brew install cmake
+    // Copy link and download the MSI
+    https://github.com/Kitware/CMake/releases/download/v3.27.5/cmake-3.27.5-windows-x86_64.msi
 ```
 #### dlib 
 
 C++ library that provides machine learning tools to be used in several other languages such as python.
 ```
     // use pip to install dlib
-    python -m pip install dlib
+    pip install https://github.com/jloh02/dlib/releases/download/v19.22/dlib-19.22.99-cp310-cp310-win_amd64.whl
 ``` 
 #### face-recognition
 
