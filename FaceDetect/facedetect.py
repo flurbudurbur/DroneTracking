@@ -361,10 +361,15 @@ class FaceDetect:
             g = 255 if is_recognize and label != 'Unknown' else 0
             r = 255 if is_recognize and label == 'Unknown' else 0
 
-            # Draw a box around the face
-            self.canvas.rectangle(self.frame, (left, top), (right, bottom), (b, g, r), 2)
+            if label == 'Unknown':
+                label = 'Enemy'
+            elif label != 'Unknown':
+                label = 'Friendly'
 
-            # Draw a label with a label below the face
+            # # Draw a box around the face
+            self.canvas.rectangle(self.frame, (left, top), (right, bottom), (b, g, r), 5)
+
+            # # Draw a label with a label below the face
             self.canvas.rectangle(self.frame, (left, bottom - 35), (right, bottom), (b, g, r), self.canvas.FILLED)
             font = self.canvas.FONT_HERSHEY_DUPLEX
             self.canvas.putText(self.frame, label, (left + 6, bottom - 6), font, 0.9, (255, 255, 255), 1)
