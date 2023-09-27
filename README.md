@@ -1,7 +1,6 @@
 # The assignment
 
-You must make a python program which is able to detect faces and deem them an 'Enemy', 'Friend' or 'Unknown'. If they're an _Enemy_, the drone must follow their face and face their direction. The interface will go through LabView which should be able to access all the drone's functions.
-
+You must make a python program which is able to detect faces and deem them an _Enemy_, _Friend_ or _Unknown_. If they're an _Enemy_, the drone must follow their face and face their direction. The interface will go through LabView which should be able to access all the drone's functions.
 
 ## pre-requisites
 
