@@ -1,36 +1,103 @@
-# main.py
-# Usage: %python main.py
+import cv2 as cv
+import djitellopy as tello
 
-# Import the FaceDetect class
-from FaceDetect.facedetect import FaceDetect
+class FaceDetector():
+    """ Face detector class """
+    def __init__(self, settings=None):
+        self.settings = self.DEFAULT_SETTINGS
+        self.drone = tello.Tello()
+        # self.stream = self.drone
+        self.faces = cv.CascadeClassifier('haarcascade_frontalface_default.xml')
+        
+        if settings:
+            for setting in settings:
 
+                # Sanitize the key
+                sanitized_setting = setting.lower()
 
-# Initialize FaceDetect
-# Params:
-# - settings (optional): Dictionary with settings to be passed to the FaceDetector
-#   * mode:  image or video (default)
-#   * custom: False (default). If you wish to extend the FaceDetect class, specify the method that it needs to execute
-#   * method: call native callback methods during detection or bypass with a custom method
-#   * draw: draws the detection on the canvas if set to True (default)
-#   * print: prints the face locations and labels on the console
-#   * face-extraction: extracts captures of the faces into their own images. Applicable only to mode image
-#   * face-features: Draws the specified face features. Off by default. Pass the list ['face'] to draw the whole face
-#   * known-faces: Setting need for facial recognition when 'method' is set to 'recognize'
-#                  It is a dictionary of face labels and image paths associated.
-#                  For example: {'John': 'person1.png', 'Jane': 'person2.png'}
-#
+                # Get the value and sanitize if string, otherwise take as is
+                val = settings.get(setting)
+                val = val.lower().strip() if type(val) is str else val
 
+                # Set the settings to the sanitized keys and values
+                self.settings[sanitized_setting] = val if type(val) is bool or val else self.settings[sanitized_setting]
 
-facedetector = FaceDetect()
+    DEFAULT_SETTINGS = {
+        'scaleFactor': 1.1,
+        'minNeighbors': 4,
+        'size': (480, 360)
+    }
+    
+    def start(self):
+        self.drone.connect()
+        self.drone.streamon()
+        # self.drone.takeoff()
 
-try:
-    # When the start method is not given an image or video path, it starts the webcam
-    # For Image file: facedetector.start('<path to image file>')
-    # For Video: facedetector.start('<path to video file>')
-    # Press 'q' to exit
-    facedetector.start()
+        while True:
+            frame = cv.cvtColor(self.drone.get_frame_read().frame, cv.COLOR_BGR2RGB)
+            gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+            detections = self.faces.detectMultiScale(gray, self.settings['scaleFactor'], self.settings['minNeighbors'])
+            for x, y, w, h in detections:
+                center_x = int((x + w) / 2)
+                center_y = int((y + h) / 2)
+                forehead = int(y / 1.1)
+                hsv_frame = cv.cvtColor(frame, cv.COLOR_RGB2HSV)
 
+                # # Pick pixel value
+                pixel_center = hsv_frame[forehead, center_x]
+                hue_value = pixel_center[0]
 
-# FaceDetect always generates a FaceDetect Exception
-except Exception as error:
-    print(error)
+                # if hue value is around green, mark target as friendly
+                if hue_value > 80 and hue_value < 120:
+                    label = 'Friendly'
+                # elif hue_value > 350 and hue_value < 359 or hue_value > 0 and hue_value < 10:
+                elif hue_value > 340 and hue_value < 360 or hue_value > 0 and hue_value < 10:
+                    label = 'Enemy'
+                else:
+                    label = 'Unknown'
+
+                b = 255 if label == 'Unknown' else 0
+                g = 255 if label != 'Enemy' else 0
+                r = 255 if label == 'Enemy' else 0
+                cv.rectangle(frame, (x, y), (x+w, y+h), (b, g, r), 1)
+                cv.putText(frame, label, (x + 6, y - 6), cv.FONT_HERSHEY_DUPLEX, 0.9, (255, 255, 255), 1)
+
+                diff = (int(self.settings['size'][0] / 2 - center_x), int(self.settings['size'][1] / 2 - center_y))
+
+                # # move the drone for enemies
+                # if diff[0] > 50 and label == 'Enemy':
+                #     if self.input == 'drone':
+                #         self.drone.rotate_counter_clockwise(20)
+                #     else:
+                #         print('drone moves left')
+                # elif diff[0] < -50 and label == 'Enemy':
+                #     if self.input == 'drone':
+                #         self.drone.rotate_clockwise(20)
+                #     else:
+                #         print('drone moves right')
+                # if diff[1] > 50 and label == 'Enemy':
+                #     if self.input == 'drone':
+                #         self.drone.move_down(20)
+                #     else:
+                #         print('drone moves down')
+                # elif diff[1] < -50 and label == 'Enemy':
+                #     if self.input == 'drone':
+                #         self.drone.move_up(20)
+                #     else:
+                #         print('drone moves up')
+                # if diff[0] < 50 and diff[0] > -50 and label == 'Enemy':
+                #     print('stop left/right')
+                # if diff[1] < 50 and diff[1] > -50 and label == 'Enemy':
+                #     print('stop up/down')
+            cv.waitKey(1)
+
+            cv.imshow('Cam girls :3', frame)
+            
+            if cv.waitKey(1) & 0xFF == ord('q'):
+                break
+        # self.drone.land()
+        cv.destroyAllWindows()
+    
+if __name__ == '__main__':
+    detector = FaceDetector()
+    detector.start()
