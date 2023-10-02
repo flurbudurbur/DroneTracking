@@ -1,6 +1,5 @@
 import cv2 as cv
 import djitellopy as tello
-from djitellopy import TelloException
 
 class FaceDetector:
     """ Face detector class """
@@ -9,25 +8,60 @@ class FaceDetector:
         self.settings = {
             'scaleFactor': 1.2,
             'minNeighbors': 4,
-            'size': (480, 360),
+            'size': (1280, 720),
             'deadZone': 10
         }
         self.drone = tello.Tello()
         self.faces = cv.CascadeClassifier(
             'haarcascade_frontalface_default.xml')
-        self.first_face = []
+        self.tracked_face = None
+        self.tracking_lost_count = 0
+        self.max_tracking_lost_count = 10  # Adjust as needed
+
+        if settings:
+            for setting in settings:
+
+                # Sanitize the key
+                sanitized_setting = setting.lower()
+
+                # Get the value and sanitize if string, otherwise take as is
+                val = settings.get(setting)
+                val = val.lower().strip() if type(val) is str else val
+
+                # Set the settings to the sanitized keys and values
+                self.settings[sanitized_setting] = val if type(val) is bool or val else self.settings[sanitized_setting]
 
     def start(self):
         # connect to drone
         self.__connect()
         self.__connect_stream()
 
+        self.drone.send_command_with_return('setresolution high')
+        cv.namedWindow('Cam girls :3', cv.WINDOW_NORMAL)
+        cv.imshow('Cam girls :3', self.drone.get_frame_read().frame)
+        cv.resizeWindow('Cam girls :3', 1280, 720)
+        # self.drone.takeoff()
+
         while True:
             frame = cv.cvtColor(
                 self.drone.get_frame_read().frame, cv.COLOR_BGR2RGB)
-            gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+            gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)
             detections = self.faces.detectMultiScale(
                 gray, self.settings['scaleFactor'], self.settings['minNeighbors'])
+
+            if len(detections) > 0:
+                # Update tracking with the first detected face
+                x, y, w, h = detections[0]
+                cx = int((x + w) / 2)
+                cy = int((y + h) / 2)
+                label = self.__draw_detections(frame, x, y, w, h, cx)
+                self.__track_face(cx, cy, label)
+
+            else:
+                # Face not detected, increment tracking_lost_count
+                self.tracking_lost_count += 1
+                if self.tracking_lost_count >= self.max_tracking_lost_count:
+                    self.tracked_face = None  # Reset tracking if lost for too long
 
             # print(self.first_face)
             for x, y, w, h in detections:
@@ -51,6 +85,7 @@ class FaceDetector:
     
     #===# Drone utility functions #===#
     def __connect(self):
+        """ Connect to drone """
         # disable logging
         self.drone.LOGGER.disabled = True
         try:
@@ -63,28 +98,32 @@ class FaceDetector:
             print(de)
         
     def __connect_stream(self):
+        """ Connect to drone camera """
         try:
             response = self.drone.send_command_with_return('streamon')
             if response.find('ok') != 0:
-                raise TelloException('Could not start drone camera')
+                raise DroneException('Could not start drone camera')
             else:
                 print('Succesfully started drone camera')
-        except TelloException:
-            raise TelloException('Could not start stream')
+
+        except DroneException:
+            raise DroneException('Could not start stream')
         
     def __control_drone(self, diff, label):
+        """ Main drone control function. Calls functions on behalf of the drone """
         if diff[0] > self.settings['deadZone'] and label == "Enemy":
             self.__r_left(15)
         elif diff[0] < -self.settings['deadZone'] and label == "Enemy":
             self.__r_right(15)
-        elif diff[1] > self.settings['deadZone']:
-            self.__move_down(20)
-        elif diff[1] < -self.settings['deadZone']:
-            self.__move_up(20)
+        # elif diff[1] > self.settings['deadZone']:
+        #     self.__move_down(20)
+        # elif diff[1] < -self.settings['deadZone']:
+        #     self.__move_up(20)
         else:
             print('No movement necessary')
 
     def __draw_detections(self, frame, x, y, w, h, cx):
+        """ draws the rectangle around the face and returns the label """
         forehead = int(y / 1.1)
         hsv_frame = cv.cvtColor(frame, cv.COLOR_RGB2HSV)
 
@@ -111,12 +150,35 @@ class FaceDetector:
         cv.putText(frame, label, (x + 6, y - 6),
                     cv.FONT_HERSHEY_DUPLEX, 0.9, (255, 255, 255), 1)
         return label
+    
+    def __track_face(self, cx, cy, label):
+        """ Track the detected face """
+        if self.tracked_face is None:
+            # If not tracking, start tracking this face
+            self.tracked_face = {
+                'cx': cx,
+                'cy': cy,
+                'label': label,
+            }
+        else:
+            # Calculate the difference between the current and previous positions
+            diff = (cx - self.tracked_face['cx'], cy - self.tracked_face['cy'])
+            self.tracked_face['cx'] = cx
+            self.tracked_face['cy'] = cy
+            self.tracked_face['label'] = label
 
+            # Move the drone based on tracking data
+            self.__control_drone(diff, label)
+            self.tracking_lost_count = 0  # Reset tracking lost count
+
+    def __test_valid_stream(self):
+        """ test if the stream is a valid h264 format """
 
     #===# Drone movement functions #===#
     def __r_left(self, val):
+        """ Rotate left """
         try:
-            response = self.drone.send_command_with_return('left {}'.format(val))
+            response = self.drone.send_command_with_return('ccw {}'.format(val))
             if response.find('ok') != 0:
                 raise DroneException('Could not rotate left')
             else:
@@ -125,8 +187,9 @@ class FaceDetector:
             print(de)
         
     def __r_right(self, val):
+        """ Rotate right """
         try:
-            response = self.drone.send_command_with_return('right {}'.format(val))
+            response = self.drone.send_command_with_return('cw {}'.format(val))
             if response.find('ok') != 0:
                 raise DroneException('Could not rotate right')
             else:
@@ -135,6 +198,7 @@ class FaceDetector:
             print(de)
     
     def __move_up(self, val):
+        """ Move up """
         try:
             response = self.drone.send_command_with_return('up {}'.format(val))
             if response.find('ok') != 0:
@@ -145,6 +209,7 @@ class FaceDetector:
             print(de)
 
     def __move_down(self, val):
+        """ Move down """
         try:
             response = self.drone.send_command_with_return('down {}'.format(val))
             if response.find('ok') != 0:
