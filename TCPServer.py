@@ -34,9 +34,16 @@ while True:
     client_socket.send(battery_bytes)
     client_socket.send(image_bytes)
 
-    try:
-        socket.settimeout(300)
-        data = client_socket.recv(8)
-        print (data)
-    except:
-        print ("Fuck")
+    data = client_socket.recv(4)
+    datastr = str(data, 'UTF-8')
+    match datastr:
+        case 'rise':
+            print ("Opstijgen")
+        case 'trck':
+            print ("Volg")
+        case 'land':
+            print ("Landen")
+        case 'next':
+            print ("Next Target")
+        case 'strt':
+            pass
