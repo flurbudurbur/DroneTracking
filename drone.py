@@ -1,6 +1,6 @@
 import djitellopy as tello
 
-class Drone(tello.Tello):
+class Drone:
     """ Facilitate drone control """
 
     def __init__(self):
@@ -12,6 +12,7 @@ class Drone(tello.Tello):
         self.right = self.__r_right()
         self.up = self.__move_up()
         self.down = self.__move_down()
+        self.battery = self.__get_battery()
 
     def __connect(self):
         """ Connect to drone """
@@ -94,6 +95,17 @@ class Drone(tello.Tello):
                 raise DroneException('Could not move down')
             else:
                 print('Succesfully moved down')
+        except DroneException as de:
+            print(de)
+
+    def __get_battery(self):
+        """ Get battery percentage """
+        try:
+            response = self.drone.send_command_with_return('battery?')
+            if response.find('ok') != 0:
+                raise DroneException('Could not get battery percentage')
+            else:
+                print(f'{response}')
         except DroneException as de:
             print(de)
 
