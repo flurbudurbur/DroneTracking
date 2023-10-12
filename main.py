@@ -1,141 +1,156 @@
 import cv2 as cv
-import djitellopy as tello
+import numpy as np
+from djitellopy import *
+from drone import Drone
 
 class FaceDetector:
     """ Face detector class """
 
-    def __init__(self, settings=None):
+    def __init__(self, settings=None, debug=False):
         self.settings = {
             'scaleFactor': 1.2,
             'minNeighbors': 4,
             'size': (1280, 720),
-            'deadZone': 10
+            'maxTrackingLostCount': 10,
+            'faceAssociationThreshold': 50,
+            'foreheadRatio': 1.1,
+            'morphKernelSize': (5, 5),
+            'debug': debug,
         }
-        self.drone = tello.Tello()
-        self.faces = cv.CascadeClassifier(
+        self.face_cascade = cv.CascadeClassifier(
             'haarcascade_frontalface_default.xml')
-        self.tracked_face = None
+        self.tracked_faces = {}
         self.tracking_lost_count = 0
-        self.max_tracking_lost_count = 10  # Adjust as needed
+        self.face_counter = 0
+        self.mask_window_name = 'Masks'
+        self.lowest_id_face = None
+        self.drone = Drone()
+        self.cx = None
+        self.cy = None
 
         if settings:
-            for setting in settings:
-
-                # Sanitize the key
+            for setting, value in settings.items():
                 sanitized_setting = setting.lower()
-
-                # Get the value and sanitize if string, otherwise take as is
-                val = settings.get(setting)
-                val = val.lower().strip() if type(val) is str else val
-
-                # Set the settings to the sanitized keys and values
-                self.settings[sanitized_setting] = val if type(val) is bool or val else self.settings[sanitized_setting]
+                if sanitized_setting in self.settings:
+                    # Set the settings to the sanitized keys and values
+                    self.settings[sanitized_setting] = value
 
     def start(self):
-        # connect to drone
-        self.__connect()
-        self.__connect_stream()
-
-        self.drone.send_command_with_return('setresolution high')
-        cv.namedWindow('Cam girls :3', cv.WINDOW_NORMAL)
-        cv.imshow('Cam girls :3', self.drone.get_frame_read().frame)
-        cv.resizeWindow('Cam girls :3', 1280, 720)
-        # self.drone.takeoff()
+        # capture = cv.VideoCapture(0)
+        capture = self.drone.connect()
+        frame = self.drone.connect_stream()
 
         while True:
-            frame = cv.cvtColor(
-                self.drone.get_frame_read().frame, cv.COLOR_BGR2RGB)
-            gray = cv.cvtColor(frame, cv.COLOR_RGB2GRAY)
-            detections = self.faces.detectMultiScale(
+            frame = self.drone.background_frame_read().frame
+            # if not ret:
+            #     break
+
+            if self.cx is None:
+                self.cx = int(frame.shape[1] / 2)
+            if self.cy is None:
+                self.cy = int(frame.shape[0] / 2)
+
+            gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+            detections = self.face_cascade.detectMultiScale(
                 gray, self.settings['scaleFactor'], self.settings['minNeighbors'])
 
+            self.masks = []
+
             if len(detections) > 0:
-                # Update tracking with the first detected face
-                x, y, w, h = detections[0]
-                cx = int((x + w) / 2)
-                cy = int((y + h) / 2)
-                label = self.__draw_detections(frame, x, y, w, h, cx)
-                self.__track_face(cx, cy, label)
+                self.__track_faces(frame, detections)
 
             else:
-                # Face not detected, increment tracking_lost_count
-                self.tracking_lost_count += 1
-                if self.tracking_lost_count >= self.max_tracking_lost_count:
-                    self.tracked_face = None  # Reset tracking if lost for too long
+                for label in list(self.tracked_faces.keys()):
+                    self.tracked_faces[label]['tracking_lost_count'] += 1
+                    if self.tracked_faces[label]['tracking_lost_count'] >= self.settings['maxTrackingLostCount']:
+                        del self.tracked_faces[label]
 
-            # print(self.first_face)
-            for x, y, w, h in detections:
-                cx = int((x + w) / 2)
-                cy = int((y + h) / 2)
-                
-                label = self.__draw_detections(frame, x, y, w, h, cx)
+            # print(self.tracked_faces)
 
-                diff = (int(self.settings['size'][0] / 2 - cx),
-                        int(self.settings['size'][1] / 2 - cy))
+            if self.settings['debug']:
+                self.__show_debug_window(frame)
 
-                # move the drone for enemies
-                self.__control_drone(diff, label)
-
-            cv.imshow('Cam girls :3', frame)
+            cv.imshow('Webcam Feed', frame)
+            self.drone.control_drone(self.lowest_id_face, self.cx, self.cy)
 
             if cv.waitKey(1) & 0xFF == ord('q'):
                 break
 
+        # capture.release()
+        self.drone.land()
         cv.destroyAllWindows()
-    
-    #===# Drone utility functions #===#
-    def __connect(self):
-        """ Connect to drone """
-        # disable logging
-        self.drone.LOGGER.disabled = True
-        try:
-            response = self.drone.send_command_with_return('command')
-            if response.find('ok') != 0:
-                raise DroneException('Could not connect to drone')
-            else:
-                print('Succesfully connected to drone')
-        except DroneException as de:
-            print(de)
-        
-    def __connect_stream(self):
-        """ Connect to drone camera """
-        try:
-            response = self.drone.send_command_with_return('streamon')
-            if response.find('ok') != 0:
-                raise DroneException('Could not start drone camera')
-            else:
-                print('Succesfully started drone camera')
 
-        except DroneException:
-            raise DroneException('Could not start stream')
-        
-    def __control_drone(self, diff, label):
-        """ Main drone control function. Calls functions on behalf of the drone """
-        if diff[0] > self.settings['deadZone'] and label == "Enemy":
-            self.__r_left(15)
-        elif diff[0] < -self.settings['deadZone'] and label == "Enemy":
-            self.__r_right(15)
-        # elif diff[1] > self.settings['deadZone']:
-        #     self.__move_down(20)
-        # elif diff[1] < -self.settings['deadZone']:
-        #     self.__move_up(20)
-        else:
-            print('No movement necessary')
+    def __track_faces(self, frame, detections):
+        new_faces = {}
+        first_enemy_found = False
+
+        for x, y, w, h in detections:
+            cx = int((x + w) / 2)
+            cy = int((y + h) / 2)
+            label, mask = self.__draw_detections(frame, x, y, w, h, cx)
+            self.tracking_lost_count = 0
+
+            
+            associated = False
+            for face_label, face_data in self.tracked_faces.items():
+                distance = np.sqrt((cx - face_data['cx'])**2 + (cy - face_data['cy'])**2)
+                if distance < self.settings['faceAssociationThreshold']:
+                    if label == 'Enemy' and not first_enemy_found:
+                        # Associate the detected face with the first enemy found
+                        face_data['cx'] = cx
+                        face_data['cy'] = cy
+                        face_data['targeted'] = False
+                        # first_enemy_found = True
+                    else:
+                        face_data['cx'] = cx
+                        face_data['cy'] = cy
+                        face_data['targeted'] = False
+                    associated = True
+                    new_faces[face_label] = face_data
+                    break
+
+            if not associated:
+                self.face_counter += 1
+                new_faces[f'{label} {self.face_counter}'] = {
+                    'cx': cx,
+                    'cy': cy,
+                    'id': f'{self.face_counter}',
+                    'tracking_lost_count': 0,
+                    'targeted': False
+                }
+
+            if self.settings['debug']:
+                self.masks.append(mask)
+
+        self.tracked_faces = new_faces
+
+        # Print the label of the face with the lowest ID
+        self.lowest_id_face = min(self.tracked_faces.values(), key=lambda x: int(x['id']))
+        self.lowest_id_face['targeted'] = True
+
+        # print(self.tracked_faces)
 
     def __draw_detections(self, frame, x, y, w, h, cx):
-        """ draws the rectangle around the face and returns the label """
-        forehead = int(y / 1.1)
-        hsv_frame = cv.cvtColor(frame, cv.COLOR_RGB2HSV)
+        forehead = int(y / self.settings['foreheadRatio'])
+        hsv_frame = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
 
-        # Pick pixel value
-        pixel_center = hsv_frame[forehead, cx]
-        hue_value = pixel_center[0]
-        
-        # if hue value is around green, mark target as friendly
-        if hue_value > 80 and hue_value < 120:
+        friendly_lower = np.array([40, 50, 50])
+        friendly_upper = np.array([80, 255, 255])
+        enemy_lower = np.array([0, 50, 50])
+        enemy_upper = np.array([20, 255, 255])
+
+        friendly_mask = cv.inRange(hsv_frame, friendly_lower, friendly_upper)
+        enemy_mask = cv.inRange(hsv_frame, enemy_lower, enemy_upper)
+
+        friendly_mask = cv.morphologyEx(friendly_mask, cv.MORPH_CLOSE, np.ones(self.settings['morphKernelSize'], np.uint8))
+        enemy_mask = cv.morphologyEx(enemy_mask, cv.MORPH_CLOSE, np.ones(self.settings['morphKernelSize'], np.uint8))
+
+        friendly_pixel_count = np.sum(friendly_mask[forehead, :])
+        enemy_pixel_count = np.sum(enemy_mask[forehead, :])
+
+        if friendly_pixel_count > enemy_pixel_count:
             label = 'Friendly'
-        # if hue value is around red, mark target as enemy
-        elif hue_value > 340 and hue_value < 360 or hue_value > 0 and hue_value < 10:
+        elif enemy_pixel_count > friendly_pixel_count:
             label = 'Enemy'
         else:
             label = 'Unknown'
@@ -144,88 +159,38 @@ class FaceDetector:
         g = 255 if label != 'Enemy' else 0
         r = 255 if label == 'Enemy' else 0
 
+        for _, face_data in self.tracked_faces.items():
+            if face_data['targeted'] and face_data['tracking_lost_count'] < self.settings['maxTrackingLostCount']:
+                label = f'{label} - Targeted'
+            face_data['targeted'] = False
+        
         bgr_colors = (b, g, r)
 
         cv.rectangle(frame, (x, y), (x+w, y+h), bgr_colors, 1)
         cv.putText(frame, label, (x + 6, y - 6),
                     cv.FONT_HERSHEY_DUPLEX, 0.9, (255, 255, 255), 1)
-        return label
-    
-    def __track_face(self, cx, cy, label):
-        """ Track the detected face """
-        if self.tracked_face is None:
-            # If not tracking, start tracking this face
-            self.tracked_face = {
-                'cx': cx,
-                'cy': cy,
-                'label': label,
-            }
-        else:
-            # Calculate the difference between the current and previous positions
-            diff = (cx - self.tracked_face['cx'], cy - self.tracked_face['cy'])
-            self.tracked_face['cx'] = cx
-            self.tracked_face['cy'] = cy
-            self.tracked_face['label'] = label
 
-            # Move the drone based on tracking data
-            self.__control_drone(diff, label)
-            self.tracking_lost_count = 0  # Reset tracking lost count
+        colored_mask = cv.merge((friendly_mask, np.zeros_like(friendly_mask), enemy_mask))
 
-    def __test_valid_stream(self):
-        """ test if the stream is a valid h264 format """
+        return label, colored_mask
 
-    #===# Drone movement functions #===#
-    def __r_left(self, val):
-        """ Rotate left """
-        try:
-            response = self.drone.send_command_with_return('ccw {}'.format(val))
-            if response.find('ok') != 0:
-                raise DroneException('Could not rotate left')
-            else:
-                print('Succesfully rotated left')
-        except DroneException as de:
-            print(de)
-        
-    def __r_right(self, val):
-        """ Rotate right """
-        try:
-            response = self.drone.send_command_with_return('cw {}'.format(val))
-            if response.find('ok') != 0:
-                raise DroneException('Could not rotate right')
-            else:
-                print('Succesfully rotated right')
-        except DroneException as de:
-            print(de)
-    
-    def __move_up(self, val):
-        """ Move up """
-        try:
-            response = self.drone.send_command_with_return('up {}'.format(val))
-            if response.find('ok') != 0:
-                raise DroneException('Could not move up')
-            else:
-                print('Succesfully moved up')
-        except DroneException as de:
-            print(de)
+    def __show_debug_window(self, frame):
+        merged_mask = np.zeros_like(frame)
+        for mask in self.masks:
+            merged_mask = cv.bitwise_or(merged_mask, mask)
 
-    def __move_down(self, val):
-        """ Move down """
-        try:
-            response = self.drone.send_command_with_return('down {}'.format(val))
-            if response.find('ok') != 0:
-                raise DroneException('Could not move down')
-            else:
-                print('Succesfully moved down')
-        except DroneException as de:
-            print(de)
-
-class DroneException(Exception):
-    def __init_subclass__(self) -> None:
-        return super().__init_subclass__()
-    
-    def overrideException(self, customMsg):
-        print(customMsg)
+        cv.imshow(self.mask_window_name, merged_mask)
 
 if __name__ == '__main__':
-    detector = FaceDetector()
+    custom_settings = {
+        'scaleFactor': 1.2,             # Adjust the scale factor for face detection (smaller values for more detections)
+        'minNeighbors': 4,              # Adjust the minimum neighbors for face detection (higher values for fewer false positives)
+        'maxTrackingLostCount': 10,     # Maximum number of frames to keep tracking a lost face
+        'faceAssociationThreshold': 50, # Threshold for associating detected faces with tracked faces (adjust based on distance)
+        'foreheadRatio': 1.1,           # Adjust the forehead region ratio for color analysis
+        'morphKernelSize': (5, 5),      # Adjust the kernel size for morphological operations to reduce mask noise
+        'debug': False,                  # Enable or disable the debug mode
+    }
+
+    detector = FaceDetector(settings=custom_settings)
     detector.start()
