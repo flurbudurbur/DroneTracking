@@ -4,7 +4,7 @@ You must make a python program which is able to detect faces and deem them an _E
 
 ## pre-requisites
 
-* Python 3.10 (using 3.10.11 64-bit)
+* Python 3.10.0 (32-bit)
 * Tello Drone
 * [OpenCV-python](https://github.com/opencv/opencv-python)
 * [DJITelloPy](https://github.com/damiafuentes/DJITelloPy)
