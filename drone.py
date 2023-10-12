@@ -4,10 +4,11 @@ class Drone:
     """ Facilitate drone control """
 
     def __init__(self):
+        self.label['targeted'] = False
         self.drone = tello.Tello()
         self.connect = self.__connect()
         self.connect_stream = self.__connect_stream()
-        self.control_drone = self.__control_drone(None, None, None)
+        self.control_drone = self.__control_drone(self.label['targeted'], 0, 0)
         self.left = self.__r_left()
         self.right = self.__r_right()
         self.up = self.__move_up()
@@ -52,6 +53,8 @@ class Drone:
                 self.down(15)
             else:
                 print('No movement necessary')
+        else:
+            pass
 
     #===# Drone movement functions #===#
     def __r_left(self, val):

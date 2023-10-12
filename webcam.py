@@ -1,7 +1,16 @@
 import cv2 as cv
+import socket
 import numpy as np
 from djitellopy import *
 
+host = '127.0.0.1'
+port = 12345
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.bind((host, port))
+server_socket.listen(1)
+print(f"Server luistert op {host}:{port}")
+client_socket, client_address = server_socket.accept()
+print(f"Inkomende verbinding van {client_address}")
 class FaceDetector:
     """ Face detector class """
 
@@ -59,7 +68,30 @@ class FaceDetector:
             if self.settings['debug']:
                 self.__show_debug_window(frame)
 
-            cv.imshow('Webcam Feed', frame)
+            # Get drone battery percentage and send to LabView
+            battery = 80
+            battery_bytes = battery.to_bytes(4, 'big')
+            client_socket.send(battery_bytes)
+
+            # Change camera feed in to bytes and send to LabView
+            image_bytes = frame.tobytes()
+            client_socket.send(image_bytes)
+
+            # Checks if LabView buttons are pressed
+            data = client_socket.recv(4)
+            datastr = str(data, 'UTF-8')
+            match datastr:
+                case 'rise':
+                    print ("Fly")
+                case 'trck':
+                    print ("Track")
+                case 'land':
+                    print ("Land")
+                case 'next':
+                    print ("Next Target")
+                case 'strt':
+                    pass
+            # cv.imshow('Webcam Feed', frame)
 
             if cv.waitKey(1) & 0xFF == ord('q'):
                 break
