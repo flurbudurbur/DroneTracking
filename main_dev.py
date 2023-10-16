@@ -2,7 +2,6 @@ import cv2 as cv
 import numpy as np
 import djitellopy as tello
 import socket
-import time
 
 host = '127.0.0.1'
 port = 12345
@@ -49,14 +48,8 @@ class FaceDetector:
         self.drone.connect()
         frame = self.drone.streamon()
 
-        # while frame is None:
-        #     print("Waiting for video feed")
-        #     time.sleep(1)
-
         while True:
             frame = self.drone.get_frame_read().frame
-            # if not ret:
-            #     break
 
             if self.cx is None:
                 self.cx = int(frame.shape[1] / 2)
@@ -89,9 +82,9 @@ class FaceDetector:
             client_socket.send(image_bytes)
 
             # Get battery percentage and send to LabView
-            # battery = self.__get_battery()
-            # battery_bytes = battery.to_bytes(4, 'big')
-            # client_socket.send(battery_bytes)
+            battery = self.drone.get_battery()
+            battery_bytes = battery.to_bytes(4, 'big')
+            client_socket.send(battery_bytes)
 
             # Checks if LabView buttons are pressed
             data = client_socket.recv(4)
@@ -107,7 +100,7 @@ class FaceDetector:
                     print ("Next Target")
                 case 'strt':
                     pass
-            # cv.imshow('Webcam Feed', frame)
+
             if self.lowest_id_face['targeted']:
                 if self.cx < self.lowest_id_face['cx']:
                     self.drone.rotate_counter_clockwise(15)
