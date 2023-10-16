@@ -73,11 +73,9 @@ class FaceDetector:
                         if self.tracked_faces[label]['tracking_lost_count'] >= self.settings['maxTrackingLostCount']:
                             del self.tracked_faces[label]
 
-            # print(self.tracked_faces)
-
             if self.settings['debug']:
                 self.__show_debug_window(frame)
-
+                print(self.tracked_faces)
 
             # Change camera feed in to bytes and send to LabView
             image_bytes = frame.tobytes()
@@ -133,11 +131,10 @@ class FaceDetector:
         first_enemy_found = False
 
         for x, y, w, h in detections:
-            cx = int((x + w) / 2)
-            cy = int((y + h) / 2)
+            cx = int(w / 2 + x)
+            cy = int(h / 2 + y)
             label, mask = self.__draw_detections(frame, x, y, w, h, cx)
             self.tracking_lost_count = 0
-
             
             associated = False
             for face_label, face_data in self.tracked_faces.items():
@@ -175,8 +172,6 @@ class FaceDetector:
         # Print the label of the face with the lowest ID
         self.lowest_id_face = min(self.tracked_faces.values(), key=lambda x: int(x['id']))
         self.lowest_id_face['targeted'] = True
-
-        # print(self.tracked_faces)
 
     def __draw_detections(self, frame, x, y, w, h, cx):
         forehead = int(y / self.settings['foreheadRatio'])
@@ -228,7 +223,6 @@ class FaceDetector:
             merged_mask = cv.bitwise_or(merged_mask, mask)
 
         cv.imshow(self.mask_window_name, merged_mask)
-
 
 if __name__ == '__main__':
     custom_settings = {

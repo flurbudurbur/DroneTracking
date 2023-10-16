@@ -3,14 +3,6 @@ import socket
 import numpy as np
 from djitellopy import *
 
-host = '127.0.0.1'
-port = 12345
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.bind((host, port))
-server_socket.listen(1)
-print(f"Server luistert op {host}:{port}")
-client_socket, client_address = server_socket.accept()
-print(f"Inkomende verbinding van {client_address}")
 class FaceDetector:
     """ Face detector class """
 
@@ -32,6 +24,8 @@ class FaceDetector:
         self.face_counter = 0
         self.mask_window_name = 'Masks'
         self.lowest_id_face = None
+        self.cx = None
+        self.cy = None
 
         if settings:
             for setting, value in settings.items():
@@ -47,6 +41,11 @@ class FaceDetector:
             ret, frame = capture.read()
             if not ret:
                 break
+
+            if self.cx is None:
+                self.cx = int(frame.shape[1] / 2)
+            if self.cy is None:
+                self.cy = int(frame.shape[0] / 2)
 
             gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
             detections = self.face_cascade.detectMultiScale(
@@ -68,30 +67,7 @@ class FaceDetector:
             if self.settings['debug']:
                 self.__show_debug_window(frame)
 
-            # Get drone battery percentage and send to LabView
-            battery = 80
-            battery_bytes = battery.to_bytes(4, 'big')
-            client_socket.send(battery_bytes)
-
-            # Change camera feed in to bytes and send to LabView
-            image_bytes = frame.tobytes()
-            client_socket.send(image_bytes)
-
-            # Checks if LabView buttons are pressed
-            data = client_socket.recv(4)
-            datastr = str(data, 'UTF-8')
-            match datastr:
-                case 'rise':
-                    print ("Fly")
-                case 'trck':
-                    print ("Track")
-                case 'land':
-                    print ("Land")
-                case 'next':
-                    print ("Next Target")
-                case 'strt':
-                    pass
-            # cv.imshow('Webcam Feed', frame)
+            cv.imshow('Webcam Feed', frame)
 
             if cv.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -104,9 +80,10 @@ class FaceDetector:
         first_enemy_found = False
 
         for x, y, w, h in detections:
-            cx = int((x + w) / 2)
-            cy = int((y + h) / 2)
+            cx = int(w / 2 + x)
+            cy = int(h / 2 + y)
             label, mask = self.__draw_detections(frame, x, y, w, h, cx)
+            cv.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
             self.tracking_lost_count = 0
 
             
@@ -127,6 +104,7 @@ class FaceDetector:
                     associated = True
                     new_faces[face_label] = face_data
                     break
+                
 
             if not associated:
                 self.face_counter += 1
@@ -143,9 +121,25 @@ class FaceDetector:
 
         self.tracked_faces = new_faces
 
+        cv.circle(frame, (self.cx, self.cy), 5, (0, 0, 255), -1)
+
         # Print the label of the face with the lowest ID
         self.lowest_id_face = min(self.tracked_faces.values(), key=lambda x: int(x['id']))
         self.lowest_id_face['targeted'] = True
+
+        print(frame.shape)
+
+        if self.lowest_id_face['targeted']:
+            if self.cx < self.lowest_id_face['cx']:
+                print(f"Move left. {self.cx} < {self.lowest_id_face['cx']}. {self.lowest_id_face['targeted']}")
+            elif self.cx > self.lowest_id_face['cx']:
+                print(f"Move right. {self.cx} > {self.lowest_id_face['cx']}. {self.lowest_id_face['targeted']}")
+            # elif self.cy < self.lowest_id_face['cy']:
+            #     self.drone.move_up(20)
+            # elif self.cy > self.lowest_id_face['cy']:
+            #     self.drone.move_down(20)
+            else:
+                print('No movement necessary')
 
         # print(self.tracked_faces)
 
