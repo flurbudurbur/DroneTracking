@@ -78,14 +78,15 @@ class FaceDetector:
                 print(self.tracked_faces)
 
             # Change camera feed in to bytes and send to LabView
-            image_bytes = frame.tobytes()
-            client_socket.send(image_bytes)
 
             # Get battery percentage and send to LabView
             battery = self.drone.get_battery()
             battery_bytes = battery.to_bytes(4, 'big')
             client_socket.send(battery_bytes)
 
+            image_bytes = frame.tobytes()
+            client_socket.send(image_bytes)
+            
             # Checks if LabView buttons are pressed
             data = client_socket.recv(4)
             datastr = str(data, 'UTF-8')
