@@ -36,6 +36,7 @@ class FaceDetector:
         self.drone = tello.Tello()
         self.cx = None
         self.cy = None
+        self.active_tracking = True
 
         if settings:
             for setting, value in settings.items():
@@ -62,14 +63,15 @@ class FaceDetector:
 
             self.masks = []
 
-            if len(detections) > 0:
-                self.__track_faces(frame, detections)
+            if self.active_tracking:
+                if len(detections) > 0:
+                    self.__track_faces(frame, detections)
 
-            else:
-                for label in list(self.tracked_faces.keys()):
-                    self.tracked_faces[label]['tracking_lost_count'] += 1
-                    if self.tracked_faces[label]['tracking_lost_count'] >= self.settings['maxTrackingLostCount']:
-                        del self.tracked_faces[label]
+                else:
+                    for label in list(self.tracked_faces.keys()):
+                        self.tracked_faces[label]['tracking_lost_count'] += 1
+                        if self.tracked_faces[label]['tracking_lost_count'] >= self.settings['maxTrackingLostCount']:
+                            del self.tracked_faces[label]
 
             # print(self.tracked_faces)
 
@@ -91,14 +93,21 @@ class FaceDetector:
             datastr = str(data, 'UTF-8')
             match datastr:
                 case 'rise':
-                    print ("Fly")
+                    if self.drone.is_flying:
+                        self.drone.move_up(20)
+                    else:
+                        self.drone.takeoff()
                 case 'trck':
-                    print ("Track")
+                    if self.active_tracking:
+                        self.active_tracking = False
+                    else:
+                        self.active_tracking = True
                 case 'land':
-                    print ("Land")
+                    self.drone.land()
                 case 'next':
-                    print ("Next Target")
-                case 'strt':
+                    # remove the lowest id face from the tracked faces array
+                    del self.tracked_faces[min(self.tracked_faces.keys(), key=lambda x: int(x.split(' ')[1]))]
+                case _:
                     pass
 
             if self.lowest_id_face['targeted']:
@@ -107,18 +116,15 @@ class FaceDetector:
                 elif self.cx > self.lowest_id_face['cx']:
                     self.drone.rotate_clockwise(15)
                 # elif self.cy < self.lowest_id_face['cy']:
-                #     self.up(15)
+                #     self.drone.move_up(20)
                 # elif self.cy > self.lowest_id_face['cy']:
-                #     self.down(15)
+                #     self.drone.move_down(20)
                 else:
                     print('No movement necessary')
-            # else:
-            #     pass
 
             if cv.waitKey(1) & 0xFF == ord('q'):
                 break
 
-        # capture.release()
         self.drone.land()
         cv.destroyAllWindows()
 
