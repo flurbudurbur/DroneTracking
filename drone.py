@@ -4,53 +4,49 @@ class Drone:
     """ Facilitate drone control """
 
     def __init__(self):
-        self.label['targeted'] = False
+        # self.startup = {'targeted': False}
         self.drone = tello.Tello()
-        self.connect = self.__connect()
-        self.connect_stream = self.__connect_stream()
-        self.control_drone = self.__control_drone(self.label['targeted'], 0, 0)
-        self.left = self.__r_left()
-        self.right = self.__r_right()
-        self.up = self.__move_up()
-        self.down = self.__move_down()
-        self.battery = self.__get_battery()
+        # self.connection = self.drone.__connect()
+        # self.camera = self.drone.__connect_stream()
+        # self.control_drone = self.__control_drone(self.startup['targeted'], 0, 0)
 
-    def __connect(self):
-        """ Connect to drone """
-        # disable logging
-        self.drone.LOGGER.disabled = True
-        try:
-            response = self.drone.send_command_with_return('command')
-            if response.find('ok') != 0:
-                raise DroneException('Could not connect to drone')
-            else:
-                print('Succesfully connected to drone')
-        except DroneException as de:
-            exit(de)
+    # def __connect(self):
+    #     """ Connect to drone """
+    #     # disable logging
+    #     self.drone.LOGGER.disabled = True
+    #     try:
+    #         response = self.drone.send_command_with_return('command')
+    #         if response.find('ok') != 0:
+    #             raise DroneException('Could not connect to drone')
+    #         else:
+    #             print('Succesfully connected to drone')
+    #     except DroneException as de:
+    #         exit(de)
         
-    def __connect_stream(self):
-        """ Connect to drone camera """
-        try:
-            response = self.drone.send_command_with_return('streamon')
-            if response.find('ok') != 0:
-                raise DroneException('Could not start drone camera')
-            else:
-                print('Succesfully started drone camera')
+    # def __connect_stream(self):
+    #     """ Connect to drone camera """
+    #     try:
+    #         response = self.drone.send_command_with_return('streamon')
+    #         if response.find('ok') != 0:
+    #             raise DroneException('Could not start drone camera')
+    #         else:
+    #             print('Succesfully started drone camera')
 
-        except DroneException as de:
-            exit(de)
+    #     except DroneException as de:
+    #         exit(de)
         
     def __control_drone(self, label, cx, cy):
         """ Main drone control function. Calls functions on behalf of the drone """
+
         if label['targeted']:
             if cx < label['cx']:
-                self.left(15)
+                self.__r_left(15)
             elif cx > label['cx']:
-                self.right(15)
-            elif cy < label['cy']:
-                self.up(15)
-            elif cy > label['cy']:
-                self.down(15)
+                self.__r_right(15)
+            # elif cy < label['cy']:
+            #     self.up(15)
+            # elif cy > label['cy']:
+            #     self.down(15)
             else:
                 print('No movement necessary')
         else:

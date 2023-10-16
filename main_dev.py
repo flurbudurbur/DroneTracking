@@ -1,7 +1,8 @@
 import cv2 as cv
 import numpy as np
-from drone import Drone
+import djitellopy as tello
 import socket
+import time
 
 host = '127.0.0.1'
 port = 12345
@@ -31,8 +32,9 @@ class FaceDetector:
         self.tracking_lost_count = 0
         self.face_counter = 0
         self.mask_window_name = 'Masks'
-        self.lowest_id_face = None
-        self.drone = Drone()
+        self.lowest_id_face = {}
+        self.lowest_id_face['targeted'] = False
+        self.drone = tello.Tello()
         self.cx = None
         self.cy = None
 
@@ -44,13 +46,15 @@ class FaceDetector:
                     self.settings[sanitized_setting] = value
 
     def start(self):
-        # capture = cv.VideoCapture(0)
         self.drone.connect()
-        frame = self.drone.connect_stream()
+        frame = self.drone.streamon()
 
+        # while frame is None:
+        #     print("Waiting for video feed")
+        #     time.sleep(1)
 
         while True:
-            frame = self.drone.background_frame_read().frame
+            frame = self.drone.get_frame_read().frame
             # if not ret:
             #     break
 
@@ -85,9 +89,9 @@ class FaceDetector:
             client_socket.send(image_bytes)
 
             # Get battery percentage and send to LabView
-            battery = self.__get_battery()
-            battery_bytes = battery.to_bytes(4, 'big')
-            client_socket.send(battery_bytes)
+            # battery = self.__get_battery()
+            # battery_bytes = battery.to_bytes(4, 'big')
+            # client_socket.send(battery_bytes)
 
             # Checks if LabView buttons are pressed
             data = client_socket.recv(4)
@@ -104,7 +108,19 @@ class FaceDetector:
                 case 'strt':
                     pass
             # cv.imshow('Webcam Feed', frame)
-            self.drone.control_drone(self.lowest_id_face, self.cx, self.cy)
+            if self.lowest_id_face['targeted']:
+                if self.cx < self.lowest_id_face['cx']:
+                    self.drone.rotate_counter_clockwise(15)
+                elif self.cx > self.lowest_id_face['cx']:
+                    self.drone.rotate_clockwise(15)
+                # elif self.cy < self.lowest_id_face['cy']:
+                #     self.up(15)
+                # elif self.cy > self.lowest_id_face['cy']:
+                #     self.down(15)
+                else:
+                    print('No movement necessary')
+            # else:
+            #     pass
 
             if cv.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -214,6 +230,7 @@ class FaceDetector:
 
         cv.imshow(self.mask_window_name, merged_mask)
 
+
 if __name__ == '__main__':
     custom_settings = {
         'scaleFactor': 1.2,             # Adjust the scale factor for face detection (smaller values for more detections)
@@ -227,21 +244,3 @@ if __name__ == '__main__':
 
     detector = FaceDetector(settings=custom_settings)
     detector.start()
-
-
-# def camera():
-#     custom_settings = {
-#         'scaleFactor': 1.2,             # Adjust the scale factor for face detection (smaller values for more detections)
-#         'minNeighbors': 4,              # Adjust the minimum neighbors for face detection (higher values for fewer false positives)
-#         'maxTrackingLostCount': 10,     # Maximum number of frames to keep tracking a lost face
-#         'faceAssociationThreshold': 50, # Threshold for associating detected faces with tracked faces (adjust based on distance)
-#         'foreheadRatio': 1.1,           # Adjust the forehead region ratio for color analysis
-#         'morphKernelSize': (5, 5),      # Adjust the kernel size for morphological operations to reduce mask noise
-#         'debug': True,                  # Enable or disable the debug mode
-#     }
-
-#     detector = FaceDetector(settings=custom_settings)
-#     detector.start()
-
-# if __name__ == '__main__':
-#     camera()
