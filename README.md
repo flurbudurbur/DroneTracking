@@ -6,7 +6,7 @@ Because LabView is a 32-bit program, we've had to adapt and use the 32-bit versi
 
 ## pre-requisites
 
-* Python 3.10.11 (32-bit)
+* Python 3.10.0 (32-bit)
 * Tello Drone
 * [OpenCV-python](https://pypi.org/project/opencv-python/)
 * [DJITelloPy2](https://pypi.org/project/djitellopy2/)
