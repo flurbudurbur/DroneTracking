@@ -98,7 +98,7 @@ class FaceDetector:
                         self.drone.move_up(20)
                     else:
                         self.drone.takeoff()
-                case 'trck':
+                case 'face':
                     if self.active_tracking:
                         self.active_tracking = False
                     else:
@@ -108,6 +108,9 @@ class FaceDetector:
                 case 'next':
                     # remove the lowest id face from the tracked faces array
                     del self.tracked_faces[min(self.tracked_faces.keys(), key=lambda x: int(x.split(' ')[1]))]
+                case 'stop':
+                    self.drone.emergency()
+                    exit('Emergency stop button pressed. Exiting program...')
                 case _:
                     pass
 
@@ -124,10 +127,18 @@ class FaceDetector:
                         self.commands_sent = 0
                     else:
                         self.commands_sent += 1
-                # elif self.cy < self.lowest_id_face['cy']:
-                #     self.drone.move_up(20)
-                # elif self.cy > self.lowest_id_face['cy']:
-                #     self.drone.move_down(20)
+                elif self.cy < self.lowest_id_face['cy']:
+                    if self.commands_sent >= self.commands_threshold:
+                        self.drone.move_up(20)
+                        self.commands_sent = 0
+                    else:
+                        self.commands_sent += 1
+                elif self.cy > self.lowest_id_face['cy']:
+                    if self.commands_sent >= self.commands_threshold:
+                        self.drone.move_down(20)
+                        self.commands_sent = 0
+                    else:
+                        self.commands_sent += 1
                 else:
                     print('No movement necessary')
 
