@@ -36,7 +36,9 @@ class FaceDetector:
         self.drone = tello.Tello()
         self.cx = None
         self.cy = None
-        self.active_tracking = True
+        self.active_tracking = False
+        self.commands_sent = 0
+        self.commands_threshold = 10
 
         if settings:
             for setting, value in settings.items():
@@ -111,9 +113,17 @@ class FaceDetector:
 
             if self.lowest_id_face['targeted']:
                 if self.cx < self.lowest_id_face['cx']:
-                    self.drone.rotate_counter_clockwise(15)
+                    if self.commands_sent >= self.commands_threshold:
+                        self.drone.rotate_counter_clockwise(10)
+                        self.commands_sent = 0
+                    else:
+                        self.commands_sent += 1
                 elif self.cx > self.lowest_id_face['cx']:
-                    self.drone.rotate_clockwise(15)
+                    if self.commands_sent >= self.commands_threshold:
+                        self.drone.rotate_clockwise(10)
+                        self.commands_sent = 0
+                    else:
+                        self.commands_sent += 1
                 # elif self.cy < self.lowest_id_face['cy']:
                 #     self.drone.move_up(20)
                 # elif self.cy > self.lowest_id_face['cy']:
