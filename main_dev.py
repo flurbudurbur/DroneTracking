@@ -104,11 +104,13 @@ class FaceDetector:
                     else:
                         self.active_tracking = True
                 case 'land':
+                    self.active_tracking = False
                     self.drone.land()
                 case 'next':
                     # remove the lowest id face from the tracked faces array
                     del self.tracked_faces[min(self.tracked_faces.keys(), key=lambda x: int(x.split(' ')[1]))]
                 case 'stop':
+                    self.active_tracking = False
                     self.drone.emergency()
                     exit('Emergency stop button pressed. Exiting program...')
                 case _:
@@ -116,25 +118,25 @@ class FaceDetector:
 
             if self.lowest_id_face['targeted']:
                 if self.cx < self.lowest_id_face['cx']:
-                    if self.commands_sent >= self.commands_threshold:
+                    if self.commands_sent >= self.commands_threshold and self.tracked_faces is not None:
                         self.drone.rotate_counter_clockwise(10)
                         self.commands_sent = 0
                     else:
                         self.commands_sent += 1
                 elif self.cx > self.lowest_id_face['cx']:
-                    if self.commands_sent >= self.commands_threshold:
+                    if self.commands_sent >= self.commands_threshold and self.tracked_faces is not None:
                         self.drone.rotate_clockwise(10)
                         self.commands_sent = 0
                     else:
                         self.commands_sent += 1
-                elif self.cy < self.lowest_id_face['cy']:
+                elif self.cy < self.lowest_id_face['cy'] and self.tracked_faces is not None:
                     if self.commands_sent >= self.commands_threshold:
                         self.drone.move_up(20)
                         self.commands_sent = 0
                     else:
                         self.commands_sent += 1
                 elif self.cy > self.lowest_id_face['cy']:
-                    if self.commands_sent >= self.commands_threshold:
+                    if self.commands_sent >= self.commands_threshold and self.tracked_faces is not None:
                         self.drone.move_down(20)
                         self.commands_sent = 0
                     else:
@@ -155,7 +157,7 @@ class FaceDetector:
         for x, y, w, h in detections:
             cx = int(w / 2 + x)
             cy = int(h / 2 + y)
-            label, mask = self.__draw_detections(frame, x, y, w, h, cx)
+            label, mask = self.__draw_detections(frame, x, y, w, h)
             self.tracking_lost_count = 0
             
             associated = False
@@ -166,11 +168,13 @@ class FaceDetector:
                         # Associate the detected face with the first enemy found
                         face_data['cx'] = cx
                         face_data['cy'] = cy
+                        face_data['distance'] = distance
                         face_data['targeted'] = False
                         # first_enemy_found = True
                     else:
                         face_data['cx'] = cx
                         face_data['cy'] = cy
+                        face_data['distance'] = distance
                         face_data['targeted'] = False
                     associated = True
                     new_faces[face_label] = face_data
@@ -195,7 +199,7 @@ class FaceDetector:
         self.lowest_id_face = min(self.tracked_faces.values(), key=lambda x: int(x['id']))
         self.lowest_id_face['targeted'] = True
 
-    def __draw_detections(self, frame, x, y, w, h, cx):
+    def __draw_detections(self, frame, x, y, w, h):
         forehead = int(y / self.settings['foreheadRatio'])
         hsv_frame = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
 

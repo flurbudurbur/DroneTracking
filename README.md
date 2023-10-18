@@ -23,5 +23,6 @@ pip install opencv-python djitellopy2
 
 Though not directly involved in the development of the drone face-detection, they have contributed considerably in other fields of the assignemnt.
 
+* [Sebastián H.C.](https://github.com/flurbudurbur), Facetracking and drone manager.
 * [Eric T.](https://github.com/Eriomas), LabView Expert.
 * [Thijs M.](https://github.com/TopdevT), Documentation management and code support.
